@@ -1,0 +1,335 @@
+import "../derw-packages/derw-lang/stdlib/src/List" as List
+
+type Fundamental =
+    Name
+    | String
+    | Multiple { fundamental: Fundamental }
+    | Custom { alias_: Alias }
+
+type alias Alias = {
+    name: string,
+    value: Fundamental
+}
+
+type alias Definition = {
+    name: string,
+    elements: List Alias
+}
+
+type alias Construct = {
+    name: string,
+    definitions: List Definition
+}
+
+type alias Template = {
+    name: string,
+    template: string
+}
+
+exposing ( Result, Program )
+
+type Result error success =
+    Error { error: error }
+    | Ok { value: success }
+
+type alias Program = {
+    aliases: List Alias,
+    definitions: List Definition,
+    constructs: List Construct,
+    templates: List Template
+}
+
+findAlias: string -> List Alias -> Result string Alias
+findAlias name aliases =
+    case aliases of
+        [] ->
+            Error { error: `Unable to find alias ${name}` }
+
+        alias_ :: rest ->
+            if alias_.name == name then
+                Ok { value: alias_ }
+            else
+                findAlias name rest
+
+        default ->
+            Error { error: `Unable to find alias ${name}` }
+
+parseFundamental: string -> List Alias -> Result string Fundamental
+parseFundamental str aliases =
+    case str of
+        "name" ->
+            Ok { value: Name }
+
+        "string" ->
+            Ok { value: String }
+
+        "name..." ->
+            Ok { value: Multiple { fundamental: Name } }
+
+        "string..." ->
+            Ok { value: Multiple { fundamental: String } }
+
+        default ->
+            if str.startsWith "<" then
+                if str.includes "..." then
+                    let
+                        aliasName: string
+                        aliasName =
+                            str.split "..."
+                                |> (\y -> y[0])
+                                |> (\y -> y.slice 1 y.length)
+                    in
+                        case findAlias aliasName aliases of
+                            Error { error } ->
+                                Error { error: error }
+
+                            Ok { value } ->
+                                Ok { value: Multiple { fundamental: Custom { alias_: value } } }
+                else
+                    let
+                        aliasName: string
+                        aliasName =
+                            str.slice 1 -1
+                    in
+                        case findAlias aliasName aliases of
+                            Error { error } ->
+                                Error { error: error }
+
+                            Ok { value } ->
+                                Ok { value: Custom { alias_: value } }
+            else
+                Error { error: `Failed to find fundamental in ${str}` }
+
+parseAlias: string -> List Alias -> Result string Alias
+parseAlias str aliases =
+    let
+        sides: List string
+        sides =
+            str.split "="
+                |> List.map (\x -> x.trim())
+
+        unwrappedAliasName: string
+        unwrappedAliasName =
+            sides[0].slice 2 -1
+
+        unwrappedFundamental: string
+        unwrappedFundamental =
+            sides[1]
+
+        maybeFundamental: Result string Fundamental
+        maybeFundamental =
+            parseFundamental unwrappedFundamental aliases
+    in
+        case maybeFundamental of
+            Error { error } ->
+                Error { error: error }
+
+            Ok { value } ->
+                Ok { value: Alias {
+                    name: unwrappedAliasName,
+                    value: value
+                } }
+
+findElement: string -> List Alias -> Result string Alias
+findElement str aliases =
+    findAlias (str.slice 1 str.length) aliases
+
+elementFoldl: List Alias -> List string -> Result string (List Alias)
+elementFoldl aliases elements =
+    case elements of
+        [] ->
+            Ok { value: [ ] }
+
+        element :: rest ->
+            case elementFoldl aliases rest of
+                Error { error } ->
+                    Error { error: error }
+
+                Ok { value: collectedAliases } ->
+                    case findElement element aliases of
+                        Ok { value } ->
+                            Ok { value: value :: collectedAliases }
+
+                        Error { error } ->
+                            Error { error: error }
+
+        default ->
+            Ok { value: [ ] }
+
+parseDefinition: string -> List Alias -> Result string Definition
+parseDefinition str aliases =
+    let
+        sides: List string
+        sides =
+            str.split "="
+                |> List.map (\x -> x.trim())
+
+        unwrappedDefinitionName: string
+        unwrappedDefinitionName =
+            sides[0].slice 1 sides[0].length
+
+        unwrappedElements: List string
+        unwrappedElements =
+            sides[1]
+                |> (\y -> y.split " ")
+                |> List.map (\x -> x.slice 0 -1)
+
+        elements: Result string (List Alias)
+        elements =
+            elementFoldl aliases unwrappedElements
+    in
+        case elements of
+            Error { error } ->
+                Error { error: error }
+
+            Ok { value: foundElements } ->
+                Ok { value: {
+                    name: unwrappedDefinitionName,
+                    elements: foundElements
+                } }
+
+findDefintion: string -> List Definition -> Result string Definition
+findDefintion name definitions =
+    case definitions of
+        [] ->
+            Error { error: `Unable to find definition ${name}` }
+
+        definition :: rest ->
+            if definition.name == name then
+                Ok { value: definition }
+            else
+                findDefintion name rest
+
+        default ->
+            Error { error: `Unable to find definition ${name}` }
+
+definitionsFoldl: List Definition -> List string -> Result string (List Definition)
+definitionsFoldl definitions definitionNames =
+    case definitionNames of
+        [] ->
+            Ok { value: [ ] }
+
+        name :: rest ->
+            case definitionsFoldl definitions rest of
+                Error { error } ->
+                    Error { error: error }
+
+                Ok { value: collectedDefinitions } ->
+                    case findDefintion name definitions of
+                        Ok { value } ->
+                            Ok { value: value :: collectedDefinitions }
+
+                        Error { error } ->
+                            Error { error: error }
+
+        default ->
+            Ok { value: [ ] }
+
+parseConstruct: string -> List Definition -> Result string Construct
+parseConstruct str definitions =
+    let
+        sides: List string
+        sides =
+            str.split "="
+                |> List.map (\x -> x.trim())
+
+        unwrappedConstructName: string
+        unwrappedConstructName =
+            sides[0].slice 1 sides[0].length
+
+        unwrappedDefinitions: List string
+        unwrappedDefinitions =
+            sides[1]
+                |> (\y -> y.split " | ")
+
+        foundDefinitions: Result string (List Definition)
+        foundDefinitions =
+            definitionsFoldl definitions unwrappedDefinitions
+    in
+        case foundDefinitions of
+            Error { error } ->
+                Error { error: error }
+
+            Ok { value } ->
+                Ok { value: Construct {
+                    name: unwrappedConstructName,
+                    definitions: value
+                } }
+
+parseTemplate: string -> List string -> Result string Template
+parseTemplate leadingLine lines =
+    let
+        templateName: string
+        templateName =
+            leadingLine.slice 1 leadingLine.length
+
+        template: string
+        template =
+            lines.slice 0 (lines.length - 1)
+                |> (\x -> x.join "\n")
+    in
+        Ok { value: {
+            name: templateName,
+            template: template
+        } }
+
+parseHelper: List string -> Result string Program
+parseHelper lines =
+    case lines of
+        [] ->
+            Ok { value: Program {
+                aliases: [ ],
+                definitions: [ ],
+                constructs: [ ]
+            } }
+
+        line :: rest ->
+            case parseHelper rest of
+                Error { error } ->
+                    Error { error: error }
+
+                Ok { value: program } ->
+                    if line.startsWith "~<" then
+                        case parseAlias line program.aliases of
+                            Error { error } ->
+                                Error { error: error }
+
+                            Ok { value } ->
+                                Ok { value: { ...program, aliases: value :: program.aliases } }
+                    else
+                        if line.startsWith "~" then
+                            case parseDefinition line program.aliases of
+                                Error { error } ->
+                                    Error { error: error }
+
+                                Ok { value } ->
+                                    Ok { value: { ...program, definitions: value :: program.definitions } }
+                        else
+                            if line.startsWith ">" then
+                                case parseConstruct line program.definitions of
+                                    Error { error } ->
+                                        Error { error: error }
+
+                                    Ok { value } ->
+                                        Ok { value: { ...program, constructs: value :: program.constructs } }
+                            else
+                                Ok { value: program }
+
+        default ->
+            Ok { value: Program {
+                aliases: [ ],
+                definitions: [ ],
+                constructs: [ ]
+            } }
+
+exposing ( parse )
+
+parse: string -> Result string Program
+parse str =
+    let
+        lines: List string
+        lines =
+            str.split "\n"
+                |> List.reverse
+    in
+        parseHelper lines

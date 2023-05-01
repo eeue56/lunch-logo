@@ -1,5 +1,7 @@
 {
     "name": "lunch-logo",
     "exposing": [],
-    "dependencies": {}
+    "dependencies": {
+        "derw-lang/stdlib": "main"
+    }
 }

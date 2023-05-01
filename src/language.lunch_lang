@@ -1,0 +1,12 @@
+~<function_name> = name
+~<arg> = string
+~<args> = <arg...>
+
+~FUNCTION_CALL = <function_name> <args>
+>CONSTRUCT = FUNCTION_CALL
+
+#FUNCTION
+defn <function_name> do
+    @CONSTRUCT
+end
+#END

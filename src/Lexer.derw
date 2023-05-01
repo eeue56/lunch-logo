@@ -1,0 +1,93 @@
+type Construct =
+    FunctionConstruct { body: List Construct }
+
+type Lexer =
+    FunctionOpenKeyword
+    | Freeform { body: string }
+    | Semicolon
+    | FunctionOpenCloseKeyword
+    | FunctionCloseKeyword
+
+type LexingResult =
+    Error { message: string }
+    | Ok { value: List Lexer,
+        next: string }
+
+lexFreeform: string -> LexingResult
+lexFreeform str =
+    if str.trim() == "" then
+        Error { message: "Expected a freeform e.g variable name, function name but got nothing" }
+    else
+        let
+            split: List string
+            split =
+                str.split " "
+        in
+            case split of
+                head :: rest ->
+                    Ok {
+                        value: [ Freeform { body: head } ],
+                        next: rest.join " "
+                    }
+
+                default ->
+                    Error { message: "Expected a freeform but got nothing" }
+
+lexFunction: string -> LexingResult
+lexFunction str =
+    if str.startsWith "defn" then
+        let
+            rest: string
+            rest =
+                str.slice 4 -1
+        in
+            case lexFreeform rest of
+                Error { message } ->
+                    Error { message: message }
+
+                Ok { value, next } ->
+                    if next.startsWith "do" then
+                        Ok {
+                            value: FunctionOpenKeyword :: value :: FunctionOpenCloseKeyword,
+                            next: next.slice 2 -1
+                        }
+                    else
+                        Error { message: "Failed to find do" }
+    else
+        Error { message: "Did not find defn" }
+
+type FinalLexingResult =
+    FinalLexingError { message: string }
+    | FinalLexingOkay { lexed: List Lexer }
+
+lexHelper: string -> LexingResult
+lexHelper str =
+    if str == "" then
+        Ok {
+            value: [ ],
+            next: ""
+        }
+    else
+        case lexFunction str of
+            Ok { value, next } ->
+                case lex next of
+                    Error { message } ->
+                        Error { message: message }
+
+                    Ok { value } ->
+                        Ok {
+                            value: value :: lexed,
+                            next: next
+                        }
+
+            Error { message } ->
+                Error { message: message }
+
+lex: string -> FinalLexingResult
+lex str =
+    case lexHelper str of
+        Ok { value } ->
+            FinalLexingOkay { lexed: value }
+
+        Error { message } ->
+            FinalLexingError { message: message }

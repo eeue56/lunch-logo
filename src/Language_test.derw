@@ -1,0 +1,34 @@
+import "../derw-packages/derw-lang/stdlib/src/Test" as Test
+import "./Language" as Language exposing ( Result, Program )
+
+snapshotAlias: void -> Result string Program
+snapshotAlias _ =
+    Language.parse "~<function_name> = name"
+
+snapshotAliases: void -> Result string Program
+snapshotAliases _ =
+    Language.parse "~<function_name> = name\n~<args> = string"
+
+snapshotMultipleAlias: void -> Result string Program
+snapshotMultipleAlias _ =
+    Language.parse "~<args> = name..."
+
+snapshotCustomAlias: void -> Result string Program
+snapshotCustomAlias _ =
+    Language.parse "~<arg> = name\n~<args> = <arg...>"
+
+snapshotInvalidAlias: void -> Result string Program
+snapshotInvalidAlias _ =
+    Language.parse "~<function_name> = frog"
+
+snapshotDefinition: void -> Result string Program
+snapshotDefinition _ =
+    Language.parse "~<function_name> = name\n~FUNCTION_CALL = <function_name>"
+
+snapshotConstruct: void -> Result string Program
+snapshotConstruct _ =
+    Language.parse "~<function_name> = name\n~FUNCTION_CALL = <function_name>\n>CONSTRUCT = FUNCTION_CALL"
+
+snapshotEitherConstruct: void -> Result string Program
+snapshotEitherConstruct _ =
+    Language.parse "~<args> = name...\n~<function_name> = name\n~RUN_FUNCTION = <function_name>\n~FUNCTION_CALL = <function_name> <args>\n>CONSTRUCT = FUNCTION_CALL | RUN_FUNCTION"

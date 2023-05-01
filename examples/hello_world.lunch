@@ -1,0 +1,3 @@
+defn main do
+    print "hello world"
+end
